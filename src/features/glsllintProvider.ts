@@ -53,7 +53,12 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
 
     let outputFileName = textDocument.fileName + ".spv";
 
-    if(config.shadercOutputDir !== null)
+    if(!config.outputSPV)
+    {
+      console.log("no output generated");
+      outputFileName = "-"
+    }
+    else if(config.shadercOutputDir !== null && config.shadercOutputDir != "")
     {
       let filename = outputFileName.replace(/^.*[\\\/]/, '')
       outputFileName = config.shadercOutputDir + "/" + filename;
@@ -67,6 +72,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     
     args.push("-o");
     args.push(outputFileName);
+    console.log(args);
     
 
     let options = vscode.workspace.rootPath ? { cwd: vscode.workspace.rootPath } :
@@ -74,7 +80,6 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
 
     let childProcess = cp.spawn(config.glslcPath, args, options);
     if (childProcess.pid) {
-      childProcess.stdout.on('data', (data) => { decoded += data; });
       childProcess.stderr.on('data', (data) => { decoded += data; });
       childProcess.stdout.on('end', () => {
     

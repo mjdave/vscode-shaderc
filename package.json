@@ -2,8 +2,12 @@
     "name": "vscode-shaderc",
     "displayName": "Shaderc GLSL Linter",
     "description": "Linting for glsl using shaderc",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "publisher": "majicDave",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/mjdave/vscode-shaderc"
+    },
     "engines": {
         "vscode": "^1.29.0"
     },
@@ -56,6 +60,11 @@
                     "type": "string",
                     "default": "",
                     "description": "Output directory for compiled shaders"
+                },
+                "shaderc-lint.outputSPV": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Output SPV files. Disable this if you want linting only, with no spv file generation."
                 },
                 "shaderc-lint.includeSupport": {
                     "type": "boolean",

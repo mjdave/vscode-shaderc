@@ -8,7 +8,7 @@ By default .frag and .vert files will be linted.
 
 ## Extension Settings
 
-Shaderc offers the following settings:
+Shaderc Linter offers the following settings:
 
 - `shaderc-lint.glslcPath`: (required) Set this to the path of the glslc executable on your system
 - `shaderc-lint.glslcArgs`: Additional arguments for the glslc executable
