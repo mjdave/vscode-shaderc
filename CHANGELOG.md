@@ -1,5 +1,10 @@
 # Change Log
-Version 0.0.2
+Version 0.0.4
+
+## 23 Nov 2018
+
+Version 0.0.4
+- Fixes bug where errors in included files would show up at the line number of the parent file. These errors now show up at the #include line.
 
 ## 16 Nov 2018
 

@@ -15,6 +15,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerCodeActionsProvider('glsl', linter);
 }
 
+
+
 // this method is called when your extension is deactivated
 export function deactivate() {
 }

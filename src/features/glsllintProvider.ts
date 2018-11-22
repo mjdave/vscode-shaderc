@@ -9,19 +9,43 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
   private diagnosticCollection: vscode.DiagnosticCollection;
 
   public activate (subscriptions: vscode.Disposable[]) {
+
+    
+    let buildCommand = vscode.commands.registerCommand('shaderc-lint.build', () => {
+      let document = vscode.window.activeTextEditor.document;
+      document.save();
+      this.doLint(document, true, true);
+    });
+    subscriptions.push(buildCommand);
+
+   let buildAllCommand = vscode.commands.registerCommand('shaderc-lint.buildAll', () => {
+    vscode.workspace.textDocuments.forEach(document => {
+       if(document.languageId == "glsl")
+       {
+        document.save();
+        this.doLint(document, true, true);
+       }
+     });
+    });
+    subscriptions.push(buildAllCommand);
+
+
     this.command = vscode.commands.registerCommand(
       GLSLLintingProvider.commandId, this.runCodeAction, this);
     subscriptions.push(this);
     this.diagnosticCollection = vscode.languages.createDiagnosticCollection();
 
-    vscode.workspace.onDidOpenTextDocument(this.doLint, this, subscriptions);
+    vscode.workspace.onDidOpenTextDocument(this.doLintWithoutSave, this, subscriptions);
+
+    vscode.workspace.onDidChangeTextDocument(this.doLintDueToTextChange, this, subscriptions);
+
     vscode.workspace.onDidCloseTextDocument((textDocument) => {
       this.diagnosticCollection.delete(textDocument.uri);
     }, null, subscriptions);
 
-    vscode.workspace.onDidSaveTextDocument(this.doLint, this);
+    vscode.workspace.onDidSaveTextDocument(this.doLintWithSaveIfConfigured, this);
 
-    vscode.workspace.textDocuments.forEach(this.doLint, this);
+    vscode.workspace.textDocuments.forEach(this.doLintWithoutSave, this);
   }
 
   public dispose (): void {
@@ -29,15 +53,23 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     this.diagnosticCollection.dispose();
     this.command.dispose();
   }
+  private doLintWithoutSave (textDocument: vscode.TextDocument): any {
+    this.doLint(textDocument, false, false)
+  }
+  private doLintWithSaveIfConfigured (textDocument: vscode.TextDocument): any {
+    this.doLint(textDocument, false, true)
+  }
+  private doLintDueToTextChange (textDocumentChangeEvent: vscode.TextDocumentChangeEvent): any {
+    //this.doLint(textDocumentChangeEvent.document, false, false) //doesn't work, because the file is not saved. Not sure how to implement
+  }
 
-  private doLint (textDocument: vscode.TextDocument): any {
+  private doLint (textDocument: vscode.TextDocument, saveOutputEvenIfNotConfigured: boolean, saveOutputIfConfigured: boolean): any {
     if (textDocument.languageId !== 'glsl') {
       return;
     }
 
     const config = vscode.workspace.getConfiguration('shaderc-lint');
-    // The code you place here will be executed every time your command is
-    // executed
+    
     if (config.glslcPath === null ||
       config.glslcPath === '') {
       vscode.window.showErrorMessage(
@@ -48,9 +80,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     let decoded = '';
     let diagnostics: vscode.Diagnostic[] = [];
 
-    let args = config.glslcArgs.split(/\s+/).filter(arg => arg);
-    args.push(textDocument.fileName);
-
+    
 
     let inputFilePath = textDocument.fileName;
     let inputFilename = inputFilePath.replace(/^.*[\\\/]/, '');
@@ -58,9 +88,16 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     let outputFilePath = inputFilePath + ".spv";
     let outputFileName = inputFilename + ".spv";
 
-    if(!config.outputSPV)
+
+    let args = config.glslcArgs.split(/\s+/).filter(arg => arg);
+    args.push(textDocument.fileName);
+
+
+
+    let saveOutput = saveOutputEvenIfNotConfigured || (saveOutputIfConfigured && config.outputSPVOnSave);
+
+    if(!saveOutput)
     {
-      console.log("no output generated");
       outputFilePath = "-";
     }
     else if(config.shadercOutputDir !== null && config.shadercOutputDir !== "")
@@ -76,8 +113,6 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     
     args.push("-o");
     args.push(outputFilePath);
-    console.log(args);
-    
 
     let options = vscode.workspace.rootPath ? { cwd: vscode.workspace.rootPath } :
       undefined;
@@ -86,12 +121,13 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     if (childProcess.pid) {
       childProcess.stderr.on('data', (data) => { decoded += data; });
       childProcess.stdout.on('end', () => {
+        
+        let displayedError = false;
+        let includedFileWarning = false;
+        let savedSPVFile = saveOutput;
     
         let lines = decoded.toString().split(/(?:\r\n|\r|\n)/g);
         let foundError = (lines.length > 1 || (lines.length > 0 && lines[0] !== ""));
-        let displayedError = false;
-        
-      //console.log(decoded);
 
         lines.forEach(line => {
           if (line !== '') {
@@ -147,6 +183,11 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
                 let diagnostic = new vscode.Diagnostic(range, message, severity);
                 diagnostics.push(diagnostic);
                 displayedError = true;
+                
+                if(severity === vscode.DiagnosticSeverity.Error)
+                {
+                  savedSPVFile = false;
+                }
               } 
               else 
               {
@@ -160,11 +201,17 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
                   if (config.includeSupport && line.includes('Missing entry point')) 
                   {
                     severity = vscode.DiagnosticSeverity.Warning;
-                    message = "Missing entry point. No .spv file was generated, but you can ignore this warning if this file is mant to be #included elsewhere.";
+                    message = "Missing entry point. No .spv file was generated, but you can ignore this warning if this file is meant to be #included elsewhere.";
+                    savedSPVFile = false;
+                    includedFileWarning = true;
                   }
                   let diagnostic =  new vscode.Diagnostic(range, message, severity);
                   diagnostics.push(diagnostic);
                   displayedError = true;
+                  if(severity === vscode.DiagnosticSeverity.Error)
+                  {
+                    savedSPVFile = false;
+                  }
 
                 }
               }
@@ -176,15 +223,36 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
         {
           let message = "Error:" + decoded.toString();
           let range = textDocument.lineAt(0).range;
-          console.log(decoded.toString());
           
           let diagnostic = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
           diagnostics.push(diagnostic);
+          displayedError = true;
+          savedSPVFile = false;
         }
 
         this.diagnosticCollection.set(textDocument.uri, diagnostics);
+
+        if(saveOutput)
+        {
+          if(!savedSPVFile)
+          {
+            if(!includedFileWarning)
+            {
+              vscode.window.showErrorMessage('Compile failed:' + inputFilename);
+            }
+            else
+            {
+              vscode.window.showInformationMessage('No spv saved for:' + outputFileName)
+            }
+          }
+          else
+          {
+            vscode.window.showInformationMessage('Saved:' + outputFileName)
+          }
+        }
       });
     }
+
   }
 
   public provideCodeActions (
