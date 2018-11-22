@@ -4,7 +4,10 @@ Version 0.0.4
 ## 23 Nov 2018
 
 Version 0.0.4
-- Fixes bug where errors in included files would show up at the line number of the parent file. These errors now show up at the #include line.
+- Adresses issue where modifications to included files are not compiled in parent files by:
+    - Adding 'build' and 'build all' commands with menu items
+    - By default, saving does not export spv files
+    
 
 ## 16 Nov 2018
 
