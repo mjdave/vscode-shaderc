@@ -1,12 +1,12 @@
 # Change Log
-Version 0.0.4
+Version 0.1.0
 
 ## 23 Nov 2018
 
-Version 0.0.4
+Version 0.1.0
 - Adresses issue where modifications to included files are not compiled in parent files by:
     - Adding 'build' and 'build all' commands with menu items
-    - By default, saving does not export spv files
+    - By default, saving no longer exports spv files
     
 
 ## 16 Nov 2018

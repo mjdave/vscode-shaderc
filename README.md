@@ -1,10 +1,10 @@
 # Shaderc Linter
 
-This extension uses shaderc to lint and compile GLSL to SPIRV. The aim is to provide a nice way to edit, lint, and compile GLSL shaders that use the #include directive targeted at Vulkan, but it may work for other purposes. It also compiles GLSL to SPIRV and allows you to configure an output path for the output SPIRV files.
+This extension uses shaderc to lint and compile GLSL. The aim is to provide a nice way to edit, lint, and compile GLSL shaders targeted at Vulkan, but it may work for other purposes. It has full support for the #include directive. It also adds build commands which output SPIRV files.
 
 You will need a copy of the glslc executable/binary, which is available pre-built in the [LunarG Vulkan SDK](https://www.lunarg.com/vulkan-sdk/), or on [github](https://github.com/google/shaderc)
 
-Commands to Build and Build All are made available when you are editing glsl files. These commands will export the compiled SPIRV result from shadrec to a configurable directory. 'Build All' will attempt to export SPIRV for all currently opened glsl files. Note that Build All does not build every glsl file in the workspace, only those which have been opened.
+Commands to Build and Build All are made available when you are editing glsl files. These commands will export the compiled SPIRV result from shadrec to a configurable directory. 'Build All' will compile and save out SPIRV for all currently opened glsl files. Note that Build All does not build every glsl file in the workspace, only those which have been opened. By default these commands are bound to ctrl+B and ctrl+shift+B (cmd+B/cmd+shift+B on macOS). 
 
 ## Extension Settings
 

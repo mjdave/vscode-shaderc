@@ -2,7 +2,7 @@
     "name": "vscode-shaderc",
     "displayName": "Shaderc GLSL Linter",
     "description": "Linting for glsl using shaderc",
-    "version": "0.0.4",
+    "version": "0.1.0",
     "publisher": "majicDave",
     "repository": {
         "type": "git",
@@ -20,6 +20,8 @@
         "Vertex shader",
         "Fragment shader",
         "Vulkan",
+        "SPIRV",
+        "shaderc",
         "OpenGL",
         "WebGL",
         "OpenGL Shading Language"

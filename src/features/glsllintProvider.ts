@@ -238,16 +238,16 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
           {
             if(!includedFileWarning)
             {
-              vscode.window.showErrorMessage('Compile failed:' + inputFilename);
+              vscode.window.showErrorMessage('Compile failed: ' + inputFilename);
             }
             else
             {
-              vscode.window.showInformationMessage('No spv saved for:' + outputFileName)
+              vscode.window.showInformationMessage('No entry point: ' + inputFilename)
             }
           }
           else
           {
-            vscode.window.showInformationMessage('Saved:' + outputFileName)
+            vscode.window.showInformationMessage('✅ Saved ' + outputFileName)
           }
         }
       });
