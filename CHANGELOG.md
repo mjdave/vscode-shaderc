@@ -1,5 +1,5 @@
 # Change Log
-Version 0.1.0
+Version 0.1.1
 
 ## 23 Nov 2018
 
@@ -7,6 +7,9 @@ Version 0.1.0
 - Adresses issue where modifications to included files are not compiled in parent files by:
     - Adding 'build' and 'build all' commands with menu items
     - By default, saving no longer exports spv files
+    
+Version 0.1.1
+- Fix issue where glsl files would be rebuilt if 'buildAllOnSave' option was set even if a non glsl file in the workspace was saved
     
 
 ## 16 Nov 2018

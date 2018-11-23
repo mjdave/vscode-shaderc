@@ -20,7 +20,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
 
    let buildAllCommand = vscode.commands.registerCommand('shaderc-lint.buildAll', () => {
     vscode.workspace.textDocuments.forEach(document => {
-       if(document.languageId == "glsl")
+       if(document.languageId === "glsl")
        {
         document.save();
         this.doLint(document, true, true);
@@ -54,24 +54,27 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     this.command.dispose();
   }
   private doLintWithoutSave (textDocument: vscode.TextDocument): any {
-    this.doLint(textDocument, false, false)
+    this.doLint(textDocument, false, false);
   }
   private doLintWithSaveIfConfigured (textDocument: vscode.TextDocument): any {
     
-    const config = vscode.workspace.getConfiguration('shaderc-lint');
-    if(config.buildAllOnSave)
+    if(textDocument.languageId === "glsl")
     {
-      vscode.workspace.textDocuments.forEach(document => {
-        if(document.languageId == "glsl")
-        {
-         document.save();//hopefully this never calls onDidSaveTextDocument or we are in big trouble
-         this.doLint(document, true, true);
-        }
-      });
-    }
-    else
-    {
-       this.doLint(textDocument, false, true)
+      const config = vscode.workspace.getConfiguration('shaderc-lint');
+      if(config.buildAllOnSave)
+      {
+        vscode.workspace.textDocuments.forEach(document => {
+          if(document.languageId === "glsl")
+          {
+            document.save();//hopefully this never calls onDidSaveTextDocument or we are in big trouble
+            this.doLint(document, true, true);
+          }
+        });
+      }
+      else
+      {
+        this.doLint(textDocument, false, true);
+      }
     }
   }
   private doLintDueToTextChange (textDocumentChangeEvent: vscode.TextDocumentChangeEvent): any {
@@ -257,12 +260,12 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
             }
             else
             {
-              vscode.window.showInformationMessage('No entry point: ' + inputFilename)
+              vscode.window.showInformationMessage('No entry point: ' + inputFilename);
             }
           }
           else
           {
-            vscode.window.showInformationMessage('✅ Saved ' + outputFileName)
+            vscode.window.showInformationMessage('✅ Saved ' + outputFileName);
           }
         }
       });

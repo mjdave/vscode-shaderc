@@ -2,7 +2,7 @@
     "name": "vscode-shaderc",
     "displayName": "Shaderc GLSL Linter",
     "description": "Linting for glsl using shaderc",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "publisher": "majicDave",
     "repository": {
         "type": "git",
