@@ -57,7 +57,22 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     this.doLint(textDocument, false, false)
   }
   private doLintWithSaveIfConfigured (textDocument: vscode.TextDocument): any {
-    this.doLint(textDocument, false, true)
+    
+    const config = vscode.workspace.getConfiguration('shaderc-lint');
+    if(config.buildAllOnSave)
+    {
+      vscode.workspace.textDocuments.forEach(document => {
+        if(document.languageId == "glsl")
+        {
+         document.save();//hopefully this never calls onDidSaveTextDocument or we are in big trouble
+         this.doLint(document, true, true);
+        }
+      });
+    }
+    else
+    {
+       this.doLint(textDocument, false, true)
+    }
   }
   private doLintDueToTextChange (textDocumentChangeEvent: vscode.TextDocumentChangeEvent): any {
     //this.doLint(textDocumentChangeEvent.document, false, false) //doesn't work, because the file is not saved. Not sure how to implement
@@ -94,7 +109,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
 
 
 
-    let saveOutput = saveOutputEvenIfNotConfigured || (saveOutputIfConfigured && config.outputSPVOnSave);
+    let saveOutput = saveOutputEvenIfNotConfigured || (saveOutputIfConfigured && (config.buildOnSave || config.buildAllOnSave));
 
     if(!saveOutput)
     {

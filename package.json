@@ -104,10 +104,15 @@
                     "default": "",
                     "description": "Output directory for compiled shaders"
                 },
-                "shaderc-lint.outputSPVOnSave": {
+                "shaderc-lint.buildOnSave": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Output SPV files every save. Enable this if you want to output SPV files every time you save a glsl file. Otherwise, you will need to use the Build command to output the compile SPIRV."
+                    "description": "Build and output SPV every time you save a file. If not enabled, you will need to use the Build command to output the compile SPIRV."
+                },
+                "shaderc-lint.buildAllOnSave": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Build and output SPV for every open file every time you save any file."
                 },
                 "shaderc-lint.includeSupport": {
                     "type": "boolean",
