@@ -109,11 +109,6 @@
                     "default": false,
                     "description": "Build and output SPV every time you save a file. If not enabled, you will need to use the Build command to output the compile SPIRV."
                 },
-                "shaderc-lint.buildAllOnSave": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Build and output SPV for every file in your workspace every time you save any file."
-                },
                 "shaderc-lint.includeSupport": {
                     "type": "boolean",
                     "default": true,
