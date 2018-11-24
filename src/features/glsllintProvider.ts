@@ -3,13 +3,18 @@ import * as cp from 'child_process';
 
 import * as vscode from 'vscode';
 
-
+const LINT_OK = 0;
+const LINT_ERROR = 1;
+const LINT_NO_ENTRY_POINT_WARNING = 2;
 
 
 export default class GLSLLintingProvider implements vscode.CodeActionProvider {
   private static commandId: string = 'shaderclint.runCodeAction';
   private command: vscode.Disposable;
   private diagnosticCollection: vscode.DiagnosticCollection;
+  private storagePath: string = undefined;
+  private textChangeLintQueued: vscode.TextDocument = undefined;
+  private textChangeLintInProgress: boolean = false;
   
   private extensions: Array<string> = ['.frag', '.vert'];
   
@@ -68,17 +73,31 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     });
   }
 
-  public activate (subscriptions: vscode.Disposable[]) {
+  public activate (subscriptions: vscode.Disposable[], storagePath_: string|undefined) {
+    this.storagePath = storagePath_;
+    
+    if(this.storagePath) {
+      let fs = require("fs");
+      fs.mkdir(this.storagePath, { recursive: true }, (err) => {
+      });
+    }
+
     this.findGLSLFiles( files => {
       files.forEach( filePath => {
         this.scanFileForIncludes(filePath);
       });
+
+      vscode.workspace.textDocuments.forEach(this.documentOpened, this);
+      this.documentModified(vscode.window.activeTextEditor.document);
     });
     
     let buildCommand = vscode.commands.registerCommand('shaderc-lint.build', () => {
       let document = vscode.window.activeTextEditor.document;
-      document.save();
-      this.doLint(document, true, true);
+      if(document.languageId === "glsl")
+      {
+        document.save();
+        this.compileAndLint(document, true, true);
+      }
     });
     subscriptions.push(buildCommand);
 
@@ -127,8 +146,8 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     }, null, subscriptions);
 
     vscode.workspace.onDidSaveTextDocument(this.documentSaved, this);
+    vscode.workspace.onDidChangeTextDocument(this.documentModifiedEvent, this);
 
-    vscode.workspace.textDocuments.forEach(this.documentOpened, this);
   }
 
   public dispose (): void {
@@ -141,7 +160,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     if(textDocument.languageId === "glsl")
     {
       this.scanFileForIncludes(textDocument.uri.fsPath);
-      this.doLint(textDocument, false, false);
+      this.compileAndLint(textDocument, false, false);
     }
   }
 
@@ -149,11 +168,60 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     if(textDocument.languageId === "glsl")
     {
       this.scanFileForIncludes(textDocument.uri.fsPath);
-      this.doLint(textDocument, false, true);
+      this.compileAndLint(textDocument, false, true);
     }
   }
 
-  private compile(inputFilePath: string, saveOutput: boolean, callback: (output: string) => any)
+  private writeToTmpFileCompileAndLint(textDocument: vscode.TextDocument)
+  {
+    this.textChangeLintInProgress = true;
+    let tempFilePath = this.storagePath + "/tmpFile." + textDocument.uri.fsPath.split('.').pop();
+    let fs = require("fs");
+    fs.writeFile(tempFilePath, textDocument.getText(), (err) => {
+      const path = require('path');
+      let addionalIncludePath = path.dirname(textDocument.uri.fsPath);
+      this.compile(tempFilePath, addionalIncludePath, false, (output) => {
+        let inputFilename = tempFilePath.replace(/^.*[\\\/]/, '');
+        try {
+          this.doLint(textDocument, inputFilename, output);
+        }
+        catch(err) {console.log("linting failed:" + err);}
+        if(this.textChangeLintQueued) {
+          let queuedDocuemnt: vscode.TextDocument = this.textChangeLintQueued;
+          this.textChangeLintQueued = undefined;
+          this.writeToTmpFileCompileAndLint(queuedDocuemnt);
+        }
+        else {
+          this.textChangeLintInProgress = false;
+        }
+      });
+    });
+  }
+
+  private documentModified(textDocument: vscode.TextDocument)
+  {
+    if(textDocument) {
+      const config = vscode.workspace.getConfiguration('shaderc-lint');
+      if(!config.requireSaveToLint)
+      {
+        if(textDocument.languageId === "glsl" && this.storagePath)
+        {
+          if(this.textChangeLintInProgress) {
+            this.textChangeLintQueued = textDocument;
+          }
+          else {
+            this.writeToTmpFileCompileAndLint(textDocument);
+          }
+        }
+      }
+    }
+  }
+  
+  private documentModifiedEvent (changeEvent: vscode.TextDocumentChangeEvent): any {
+    this.documentModified(changeEvent.document);
+  }
+
+  private compile(inputFilePath: string, additionalIncludeDir: string, saveOutput: boolean, callback: (output: string) => any)
   {
     const config = vscode.workspace.getConfiguration('shaderc-lint');
     if (config.glslcPath === null ||
@@ -168,20 +236,21 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     let outputFilePath = inputFilePath + ".spv";
     let outputFileName = inputFilename + ".spv";
 
-    if(config.shadercOutputDir !== null && config.shadercOutputDir !== "")
-    {
+    if(config.shadercOutputDir !== null && config.shadercOutputDir !== "") {
       outputFilePath = config.shadercOutputDir + "/" + outputFileName;
     }
-    if(!saveOutput)
-    {
+    if(!saveOutput){
       outputFilePath = "-";
     }
     
     let args = config.glslcArgs.split(/\s+/).filter(arg => arg);
     args.push(inputFilePath);
+
+    if(additionalIncludeDir){
+      args.push("-I", additionalIncludeDir);
+    }
     
-    if(config.defaultGLSLVersion !== null && config.defaultGLSLVersion !== "")
-    {
+    if(config.defaultGLSLVersion !== null && config.defaultGLSLVersion !== "") {
       args.push("-std=" + config.defaultGLSLVersion);
     }
     
@@ -224,7 +293,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     let remainingCount = filenames.length;
     filenames.forEach(filepath => {
       let saveOutput: boolean = true;
-      this.compile(filepath, saveOutput, output=> {
+      this.compile(filepath, undefined, saveOutput, output=> {
         let lines = output.split(/(?:\r\n|\r|\n)/g);
         let foundError = false;
         let foundMissingEntryPoint = false;
@@ -268,121 +337,23 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     this.compileFiles(recompileFilenames, savedIncluders, failedIncluders, callback);
   }
 
-  private doLint (textDocument: vscode.TextDocument, saveOutputEvenIfNotConfigured: boolean, saveOutputIfConfigured: boolean): any {
-    if (textDocument.languageId !== 'glsl') {
-      return;
-    }
-
+  private compileAndLint(textDocument: vscode.TextDocument, saveOutputEvenIfNotConfigured: boolean, saveOutputIfConfigured: boolean)
+  {
     const config = vscode.workspace.getConfiguration('shaderc-lint');
     let saveOutput = saveOutputEvenIfNotConfigured || (saveOutputIfConfigured && config.buildOnSave);
-
-    this.compile(textDocument.fileName, saveOutput, output=> {
-      let displayedError = false;
-      let includedFileWarning = false;
-      
-      let diagnostics: vscode.Diagnostic[] = [];
+    this.compile(textDocument.fileName, undefined, saveOutput, output=> {
       let inputFilename = textDocument.fileName.replace(/^.*[\\\/]/, '');
-      let savedSPVFile = saveOutput;
-  
-      let lines = output.split(/(?:\r\n|\r|\n)/g);
-      let foundError = (lines.length > 1 || (lines.length > 0 && lines[0] !== ""));
-
-      lines.forEach(line => {
-        if (line !== '') {
-          let severity: vscode.DiagnosticSeverity = undefined;
-
-          if (line.includes('error:')) {
-            severity = vscode.DiagnosticSeverity.Error;
-          }
-          if (line.includes('warning:')) {
-            severity = vscode.DiagnosticSeverity.Warning;
-          }
-
-          if (severity !== undefined) {
-            let matches = line.match(/(.+):(\d+):\W(error|warning):(.+)/);
-            if (matches && matches.length === 5) {
-              let message = matches[4];
-              let errorline = parseInt(matches[2]);
-
-              let range = null;
-
-              if(line.includes(inputFilename)) {
-                let docLine = textDocument.lineAt(errorline - 1);
-                range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
-              }
-              else {
-                let includeFound = false;
-                let includeFilename = matches[1].replace(/^.*[\\\/]/, '');
-                if(includeFilename) {
-                  for(let i = 0; i < textDocument.lineCount; i++) {
-                    let docLine = textDocument.lineAt(i);
-                    if(docLine.text.includes(includeFilename) && docLine.text.includes("#include")) {
-                      includeFound = true;
-                      range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
-                      break;
-                    }
-                  }
-                }
-                if(!includeFound) {
-                  let docLine = textDocument.lineAt(0);
-                  range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
-                }
-              }
-
-              let diagnostic = new vscode.Diagnostic(range, message, severity);
-              diagnostics.push(diagnostic);
-              displayedError = true;
-              
-              if(severity === vscode.DiagnosticSeverity.Error) {
-                savedSPVFile = false;
-              }
-            } 
-            else {
-              let matches = line.match(/.+:\W(error|warning):(.+)/);
-              if (matches && matches.length === 3) {
-                let message = matches[2];
-                let docLine = textDocument.lineAt(0);
-                let range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
-                
-                if (config.includeSupport && line.includes('Missing entry point')) {
-                  severity = vscode.DiagnosticSeverity.Warning;
-                  message = "Missing entry point. No .spv file was generated, but you can ignore this warning if this file is meant to be #included elsewhere.";
-                  savedSPVFile = false;
-                  includedFileWarning = true;
-                }
-                let diagnostic =  new vscode.Diagnostic(range, message, severity);
-                diagnostics.push(diagnostic);
-                displayedError = true;
-                if(severity === vscode.DiagnosticSeverity.Error) {
-                  savedSPVFile = false;
-                }
-              }
-            }
-          }
-        }
-      });
-
-      if(foundError && !displayedError) {
-          let message = "Error:" + output;
-          let range = textDocument.lineAt(0).range;
-          
-          let diagnostic = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
-          diagnostics.push(diagnostic);
-          displayedError = true;
-          savedSPVFile = false;
-      }
-
-      this.diagnosticCollection.set(textDocument.uri, diagnostics);
-
+      let result: number = this.doLint(textDocument, inputFilename, output);
+      
       if(saveOutput) {
         let compileIncluders: boolean = false;
-        if(!savedSPVFile) {
-          if(!includedFileWarning) {
-            vscode.window.showErrorMessage('Compile failed: ' + inputFilename);
-          }
-          else {
+        if(result !== LINT_OK) {
+          if(result === LINT_NO_ENTRY_POINT_WARNING) {
             vscode.window.showInformationMessage('✅ OK with no entry point: ' + inputFilename);
             compileIncluders = true;
+          }
+          else {
+            vscode.window.showErrorMessage('Compile failed: ' + inputFilename);
           }
         }
         else {
@@ -411,6 +382,127 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
         }
       }
     });
+  }
+
+  private doLint (textDocument: vscode.TextDocument, inputFilename: string, compiledOutput: string): number {
+    const config = vscode.workspace.getConfiguration('shaderc-lint');
+
+    let displayedError = false;
+    let includedFileWarning = false;
+    
+    let diagnostics: vscode.Diagnostic[] = [];
+    let lines = compiledOutput.split(/(?:\r\n|\r|\n)/g);
+    let foundMessage = (lines.length > 1 || (lines.length > 0 && lines[0] !== ""));
+    let foundError = false;
+
+    lines.forEach(line => {
+      if (line !== '') {
+        let severity: vscode.DiagnosticSeverity = undefined;
+
+        if (line.includes('error:')) {
+          severity = vscode.DiagnosticSeverity.Error;
+        }
+        if (line.includes('warning:')) {
+          severity = vscode.DiagnosticSeverity.Warning;
+        }
+
+        if (severity !== undefined) {
+          let matches = line.match(/(.+):(\d+):\W(error|warning):(.+)/);
+          let message = undefined;
+          let errorline = 0;
+          if(matches) {
+            message = matches[4];
+            errorline = parseInt(matches[2]);
+          }
+          else {
+            matches = line.match(/(.+): (error|warning):.*:(\d+):.*:\W*(.+)/);
+            if(matches) {
+              message = matches[4];
+              errorline = parseInt(matches[3]);
+            }
+          }
+          if (matches && matches.length === 5) {
+
+            let range = null;
+
+            if(line.includes(inputFilename)) {
+              let docLine = textDocument.lineAt(errorline - 1);
+              range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
+            }
+            else {
+              let includeFound = false;
+              let includeFilename = matches[1].replace(/^.*[\\\/]/, '');
+              if(includeFilename) {
+                for(let i = 0; i < textDocument.lineCount; i++) {
+                  let docLine = textDocument.lineAt(i);
+                  if(docLine.text.includes(includeFilename) && docLine.text.includes("#include")) {
+                    includeFound = true;
+                    range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
+                    break;
+                  }
+                }
+              }
+              if(!includeFound) {
+                let docLine = textDocument.lineAt(0);
+                range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
+              }
+            }
+
+            let diagnostic = new vscode.Diagnostic(range, message, severity);
+            diagnostics.push(diagnostic);
+            displayedError = true;
+            
+            if(severity === vscode.DiagnosticSeverity.Error) {
+              foundError = true;
+            }
+          } 
+          else {
+            let matches = line.match(/.+:\W(error|warning):(.+)/);
+            if (matches && matches.length === 3) {
+              let message = matches[2];
+              let docLine = textDocument.lineAt(0);
+              let range = new vscode.Range(docLine.lineNumber, docLine.firstNonWhitespaceCharacterIndex, docLine.lineNumber, docLine.range.end.character);
+              
+              if (config.includeSupport && line.includes('Missing entry point')) {
+                severity = vscode.DiagnosticSeverity.Warning;
+                message = "Missing entry point. No .spv file was generated, but you can ignore this warning if this file is meant to be #included elsewhere.";
+                foundError = true;
+                includedFileWarning = true;
+              }
+              let diagnostic =  new vscode.Diagnostic(range, message, severity);
+              diagnostics.push(diagnostic);
+              displayedError = true;
+              if(severity === vscode.DiagnosticSeverity.Error) {
+                foundError = true;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if(foundMessage && !displayedError) {
+        let message = "Error:" + compiledOutput;
+        let range = textDocument.lineAt(0).range;
+        
+        let diagnostic = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
+        diagnostics.push(diagnostic);
+        displayedError = true;
+        foundError = true;
+    }
+
+    this.diagnosticCollection.set(textDocument.uri, diagnostics);
+
+    if(foundError) {
+      if(includedFileWarning) {
+        return LINT_NO_ENTRY_POINT_WARNING;
+      } else {
+        return LINT_ERROR;
+      }
+    }
+
+    return LINT_OK;
+
   }
 
   public provideCodeActions (
