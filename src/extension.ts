@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     let linter = new GLSLLintingProvider();
     linter.activate(context.subscriptions);
-    vscode.languages.registerCodeActionsProvider('glsl', linter);
+    vscode.languages.registerCodeActionsProvider({ scheme: 'file', language: 'glsl' }, linter);
 }
 
 

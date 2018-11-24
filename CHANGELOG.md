@@ -1,5 +1,11 @@
 # Change Log
-Version 0.1.1
+Version 0.2.0
+
+## 24 Nov 2018
+
+Version 0.2.0
+- Now parses all glsl files in your workspace to keep a list of #includes, so when you build an included file it will also re-build all includers.
+- Build All now builds all glsl files in your workspace, not just those that are open.
 
 ## 23 Nov 2018
 

@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 
 export default class GLSLLintingProvider implements vscode.CodeActionProvider {
-  private static commandId: string = 'glsllint.runCodeAction';
+  private static commandId: string = 'shaderclint.runCodeAction';
   private command: vscode.Disposable;
   private diagnosticCollection: vscode.DiagnosticCollection;
   
@@ -16,7 +16,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
   private scanFileForIncludes (uri: vscode.Uri): any {
     let fs = require("fs");
     let readline = require("readline");
-    //console.log("scsanning: " + uri.path);
+    //console.log("scanning: " + uri.path);
     this.includers[uri.fsPath] = [];
     let lineReader = readline.createInterface({
       input: fs.createReadStream(uri.fsPath)
@@ -32,15 +32,18 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
   }
 
   public activate (subscriptions: vscode.Disposable[]) {
-
     
-    vscode.workspace.findFiles('*.{frag,vert}').then(
-      files => { 
-        files.forEach( uri => {
-          this.scanFileForIncludes(uri);
-        });
-      }
-    );
+    let extensions: Array<string> = ['.frag', '.vert'];
+
+    extensions.forEach(extension => {
+      vscode.workspace.findFiles('**/*' + extension).then(
+        files => { 
+          files.forEach( uri => {
+            this.scanFileForIncludes(uri);
+          });
+        }
+      );
+    });
     
     let buildCommand = vscode.commands.registerCommand('shaderc-lint.build', () => {
       let document = vscode.window.activeTextEditor.document;
@@ -49,14 +52,42 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     });
     subscriptions.push(buildCommand);
 
-   let buildAllCommand = vscode.commands.registerCommand('shaderc-lint.buildAll', () => {
-    vscode.workspace.textDocuments.forEach(document => {
-       if(document.languageId === "glsl")
-       {
+    let buildAllCommand = vscode.commands.registerCommand('shaderc-lint.buildAll', () => {
+      vscode.workspace.textDocuments.forEach(document => {
+        if(document.languageId === "glsl")
+        {
         document.save();
-        this.doLint(document, true, true);
-       }
-     });
+        }
+      });
+      extensions.forEach(extension => {
+        vscode.workspace.findFiles('**/*' + extension).then(
+          files => { 
+            let paths: Array<string> = [];
+            files.forEach( uri => {
+              paths.push(uri.fsPath);
+            });
+            
+            let saved: Array<string> = [];
+            let failed: Array<string> = [];
+            this.compileFiles(paths, saved, failed, () => {
+              if(saved.length > 0) {
+                let message: string = '✅ Compiled ' + saved.length + " files :";
+                saved.forEach(includerPath => {
+                  message = message + " "+ includerPath.replace(/^.*[\\\/]/, '');
+                });
+                vscode.window.showInformationMessage(message);
+              }
+              if(failed.length > 0) {
+                let message: string = 'Failed to compile ' + failed.length + " files :";
+                failed.forEach(includerPath => {
+                  message = message + " "+ includerPath.replace(/^.*[\\\/]/, '');
+                });
+                vscode.window.showErrorMessage(message);
+              }
+            });
+          }
+        );
+      });
     });
     subscriptions.push(buildAllCommand);
 
@@ -159,21 +190,28 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     
   }
 
-  private recursivelyCompileIncluders(filename: string, savedIncluders: Array<string>, failedIncluders: Array<string>, callback: () => any) //todo not recursive yet, doesn't support #includes in #includes
+  private recursivelyFindIncluders(filename: string, result: Array<string>) : any
   {
-    let recompileFilenames = [];
     Object.keys(this.includers).forEach(includerFilePath=> {
       this.includers[includerFilePath].forEach(included => {
         if(filename.includes(included))
         {
-          recompileFilenames.push(includerFilePath);
+          if(!result.find(thisResult => thisResult === includerFilePath)) {
+            result.push(includerFilePath);
+            this.recursivelyFindIncluders(includerFilePath, result);
+          }
         }
       });
     });
-    let remainingCount = recompileFilenames.length;
-    recompileFilenames.forEach(includerFilePath => {
+    
+  }
+  
+  private compileFiles(filenames: Array<string>, savedFiles: Array<string>, failedFiles: Array<string>, callback: () => any)
+  {
+    let remainingCount = filenames.length;
+    filenames.forEach(filepath => {
       let saveOutput: boolean = true;
-      this.compile(includerFilePath, saveOutput, output=> { //todo - if document is open, lint it
+      this.compile(filepath, saveOutput, output=> {
         let lines = output.split(/(?:\r\n|\r|\n)/g);
         let foundError = false;
         lines.forEach(line => {
@@ -183,10 +221,10 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
         });
 
         if(foundError) {
-          failedIncluders.push(includerFilePath);
+          failedFiles.push(filepath);
         }
         else {
-          savedIncluders.push(includerFilePath);
+          savedFiles.push(filepath);
         }
         remainingCount--;
         if(remainingCount === 0)
@@ -195,6 +233,14 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
         }
       });
     });
+  }
+
+  private compileIncluders(filename: string, savedIncluders: Array<string>, failedIncluders: Array<string>, callback: () => any)
+  {
+    let recompileFilenames: Array<string> = [];
+    this.recursivelyFindIncluders(filename, recompileFilenames);
+    
+    this.compileFiles(recompileFilenames, savedIncluders, failedIncluders, callback);
   }
 
   private doLint (textDocument: vscode.TextDocument, saveOutputEvenIfNotConfigured: boolean, saveOutputIfConfigured: boolean): any {
@@ -315,18 +361,26 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
           }
         }
         else {
-          vscode.window.showInformationMessage('✅ Saved ' + inputFilename + ".spv");
+          vscode.window.showInformationMessage('✅ Compiled ' + inputFilename + ".spv");
           compileIncluders = true;
         }
         if(compileIncluders) {
           let savedIncluders = [];
           let failedIncluders = [];
-          this.recursivelyCompileIncluders(textDocument.fileName, savedIncluders, failedIncluders, () => {
+          this.compileIncluders(textDocument.fileName, savedIncluders, failedIncluders, () => {
             if(savedIncluders.length > 0) {
-              vscode.window.showInformationMessage('✅ Saved ' + savedIncluders.length + " files which #included " + inputFilename);
+              let message: string = '✅ Compiled ' + savedIncluders.length + " files which #included " + inputFilename + ":";
+              savedIncluders.forEach(includerPath => {
+                message = message + " "+ includerPath.replace(/^.*[\\\/]/, '');
+              });
+              vscode.window.showInformationMessage(message);
             }
             if(failedIncluders.length > 0) {
-              vscode.window.showErrorMessage('Failed to compile ' + failedIncluders.length + " files which #included " + inputFilename);
+              let message: string = 'Failed to compile ' + failedIncluders.length + " files which #included " + inputFilename + ":";
+              failedIncluders.forEach(includerPath => {
+                message = message + " "+ includerPath.replace(/^.*[\\\/]/, '');
+              });
+              vscode.window.showErrorMessage(message);
             }
           });
         }
