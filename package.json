@@ -2,7 +2,7 @@
     "name": "vscode-shaderc",
     "displayName": "Shaderc GLSL Linter",
     "description": "Linting for glsl using shaderc",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "publisher": "majicDave",
     "repository": {
         "type": "git",
@@ -40,7 +40,11 @@
                 ],
                 "extensions": [
                     ".vert",
-                    ".frag"
+                    ".frag",
+                    ".tesc",
+                    ".tese",
+                    ".geom",
+                    ".comp"
                 ]
             }
         ],

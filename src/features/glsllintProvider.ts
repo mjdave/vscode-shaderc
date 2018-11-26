@@ -16,7 +16,7 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
   private textChangeLintQueued: vscode.TextDocument = undefined;
   private textChangeLintInProgress: boolean = false;
   
-  private extensions: Array<string> = ['.frag', '.vert'];
+  private extensions: Array<string> = ['.frag', '.vert', '.tesc', '.tese', '.geom', '.comp'];
   
   private includers: {[key: string]: Array<string>} = {};
 
@@ -81,6 +81,14 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
       fs.mkdir(this.storagePath, { recursive: true }, (err) => {
       });
     }
+
+    let additionalConfiguredExtensions = vscode.workspace.getConfiguration('files.associations');
+    Object.keys(additionalConfiguredExtensions).forEach(extension => {
+      if(additionalConfiguredExtensions[extension] === "glsl") {
+        let extensionOnly = "." + extension.split('.').pop();
+        this.extensions.push(extensionOnly);
+      }
+    });
 
     this.findGLSLFiles( files => {
       files.forEach( filePath => {
@@ -288,6 +296,21 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
     
   }
   
+  private openFiles(filenames: Array<string>, callback: (documents: Array<vscode.TextDocument>) => any)
+  {
+    let fileCount = filenames.length;
+    let documents: Array<vscode.TextDocument> = [];
+    filenames.forEach( filePath => {
+      vscode.workspace.openTextDocument(filePath).then((document: vscode.TextDocument) => {
+        documents.push(document);
+        fileCount--;
+        if(fileCount === 0){
+          callback(documents);
+        }
+      });
+    });
+  }
+
   private compileFiles(filenames: Array<string>, savedFiles: Array<string>, failedFiles: Array<string>, callback: () => any)
   {
     let remainingCount = filenames.length;
@@ -333,8 +356,27 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
   {
     let recompileFilenames: Array<string> = [];
     this.recursivelyFindIncluders(filename, recompileFilenames);
-    
-    this.compileFiles(recompileFilenames, savedIncluders, failedIncluders, callback);
+
+    this.openFiles(recompileFilenames, (documents: Array<vscode.TextDocument>) => {
+      let compileCount = documents.length;
+      documents.forEach(textDocument => {
+        let saveOutput = true;
+        this.compile(textDocument.fileName, undefined, saveOutput, output=> {
+          let inputFilename = textDocument.fileName.replace(/^.*[\\\/]/, '');
+          let result: number = this.doLint(textDocument, inputFilename, output);
+          if(result === LINT_ERROR) {
+            failedIncluders.push(textDocument.fileName);
+          }
+          else {
+            savedIncluders.push(textDocument.fileName);
+          }
+          compileCount--;
+          if(compileCount === 0) {
+            callback();
+          }
+        });
+      });
+    });
   }
 
   private compileAndLint(textDocument: vscode.TextDocument, saveOutputEvenIfNotConfigured: boolean, saveOutputIfConfigured: boolean)

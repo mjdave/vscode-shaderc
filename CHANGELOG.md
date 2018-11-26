@@ -1,5 +1,11 @@
 # Change Log
-Version 0.2.0
+Version 0.3.0
+
+## 27 Nov 2018
+
+Version 0.3.0
+- Lints includers. So if you change a function definition in an included file, all files in the workspace that fail to compile as a result will show up red in the explorer, and have correct linting when opened.
+- Adds support for compute/tesselation/geometry shaders as well as custom file extensions. If you use a custom file extension, you can use #pragma shader_stage() to tell shaderc what the shader stage is.
 
 ## 25 Nov 2018
 
