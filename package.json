@@ -44,7 +44,13 @@
                     ".tesc",
                     ".tese",
                     ".geom",
-                    ".comp"
+                    ".comp",
+                    ".rgen",
+                    ".rint",
+                    ".rahit",
+                    ".rchit",
+                    ".rmiss",
+                    ".rcall"
                 ]
             }
         ],
@@ -60,7 +66,6 @@
                 "category": "shaderc-lint"
             }
         ],
-        
         "keybindings": [
             {
                 "command": "shaderc-lint.build",
@@ -95,7 +100,7 @@
             "properties": {
                 "shaderc-lint.glslcPath": {
                     "type": "string",
-                    "default": "",
+                    "default": "glslc",
                     "description": "The path to the glslc executable"
                 },
                 "shaderc-lint.glslcArgs": {
@@ -127,6 +132,11 @@
                     "type": "string",
                     "default": "",
                     "description": "Passed to glslc with -std=. Assigns the GLSL version. Overwrites #version directives, gives a warning if they don't match."
+                },
+                "shaderc-lint.additionalFileExtensions": {
+                    "type": "array",
+                    "default": [],
+                    "description": "Additional file extensions which should be considered as GLSL."
                 }
             }
         }
@@ -139,10 +149,10 @@
         "test": "npm run compile && node ./node_modules/vscode/bin/test"
     },
     "devDependencies": {
-        "typescript": "^2.6.1",
-        "vscode": "^1.1.21",
-        "tslint": "^5.8.0",
-        "@types/node": "^8.10.25",
-        "@types/mocha": "^2.2.42"
+        "typescript": "^3.7.2",
+        "vscode": "^1.1.36",
+        "tslint": "^5.20.1",
+        "@types/node": "^12.12.7",
+        "@types/mocha": "^5.2.7"
     }
 }
