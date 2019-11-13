@@ -12,9 +12,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     let linter = new GLSLLintingProvider();
     let storagePath = context.storagePath;
-    if(!storagePath) {
+    if (!storagePath) {
         storagePath = context.logPath; //this is really icky, but when there is no workspace there is no storagePath, and no other path seems suitable, so we'll store tmp files in the log location.
     }
+
     linter.activate(context.subscriptions, storagePath);
     vscode.languages.registerCodeActionsProvider({ scheme: 'file', language: 'glsl' }, linter);
 }
