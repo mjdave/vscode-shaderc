@@ -2,7 +2,7 @@
     "name": "vscode-shaderc",
     "displayName": "Shaderc GLSL Linter",
     "description": "Linting for glsl using shaderc",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "publisher": "majicDave",
     "repository": {
         "type": "git",
@@ -149,10 +149,10 @@
         "test": "npm run compile && node ./node_modules/vscode/bin/test"
     },
     "devDependencies": {
-        "typescript": "^3.7.2",
-        "vscode": "^1.1.36",
+        "@types/mocha": "^5.2.7",
+        "@types/node": "^12.12.11",
         "tslint": "^5.20.1",
-        "@types/node": "^12.12.7",
-        "@types/mocha": "^5.2.7"
+        "typescript": "^3.7.2",
+        "vscode": "^1.1.36"
     }
 }

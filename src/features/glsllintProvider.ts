@@ -91,7 +91,8 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
 
     if (this.storagePath) {
       let fs = require("fs");
-      fs.mkdir(this.storagePath, { recursive: true });
+      fs.mkdir(this.storagePath, { recursive: true }, (err) => {
+      });
     }
 
     let additionalConfiguredExtensions = vscode.workspace.getConfiguration('files.associations');
@@ -319,10 +320,14 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
         let lines = output.split(/(?:\r\n|\r|\n)/g);
         let foundError = false;
         let foundMissingEntryPoint = false;
+        let couldntOpenOutputFile = false;
         lines.forEach(line => {
           if (line.includes('error:')) {
             if (line.includes('Missing entry point')) {
               foundMissingEntryPoint = true;
+            }
+            if (line.includes('cannot open output file')) {
+              couldntOpenOutputFile = true;
             }
             foundError = true;
           }
@@ -331,6 +336,9 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
         if (foundError) {
           if (!foundMissingEntryPoint) {
             failedFiles.push(filepath);
+            if(couldntOpenOutputFile) {
+              vscode.window.showErrorMessage('Unable to output file, Please check that the directory you have set for the shadercOutputDir config option exists.');
+            }
           }
           else {
             const config = vscode.workspace.getConfiguration('shaderc-lint');
@@ -460,7 +468,6 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
             }
           }
           if (matches && matches.length === 5) {
-
             let range = null;
 
             if (line.includes(inputFilename)) {
@@ -507,6 +514,16 @@ export default class GLSLLintingProvider implements vscode.CodeActionProvider {
                 foundError = true;
                 includedFileWarning = true;
               }
+
+    
+            if (line.includes('cannot open output file')) {
+                severity = vscode.DiagnosticSeverity.Error;
+                message = "Unable to open output file. Check that shadercOutputDir exists.";
+                vscode.window.showErrorMessage(message);
+                foundError = true;
+            }
+              
+
               let diagnostic = new vscode.Diagnostic(range, message, severity);
               diagnostics.push(diagnostic);
               displayedError = true;

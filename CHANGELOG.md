@@ -1,6 +1,12 @@
 # Change Log
 Version 0.3.0
 
+## 21 Nov 2019
+
+Version 0.4.0
+- Adds support for additional extensions, thanks to MeirBon
+- Now gives a more informative error message when your output path is not set correctly
+
 ## 27 Nov 2018
 
 Version 0.3.0
